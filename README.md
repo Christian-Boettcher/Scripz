@@ -82,3 +82,4 @@ Clicking this will automatically generate a script description based on what is 
 - [ ] Find a way to verify script input is in fact "code" before generating description. *(currently Gemini will attempt to explain anything in script input field using 1-2 sentences)*
 - [ ] Flet currently has no way to limit minimum windows size. *(meaning the window can be resized so small it makes the UI look bad lol)*
 - [ ] Searching does not clear/reset after desired result is found.
+- [ ] Minimizing has issues with restoring the window *(current workaround is closing and re-opening)* *will be pushing a patch on this soon*
