@@ -49,12 +49,13 @@ Clicking back in the main area you will now see the "+" Button on the right for 
 #
 
 # Settings and version number display:
-![Settings](https://github.com/Christian-Boettcher/Scripz/assets/103608972/23693da0-34e5-4daf-8355-1cdc25613f4c)
+![Settings](https://github.com/Christian-Boettcher/Scripz/assets/103608972/9673e124-4606-4ab4-84da-b5f1ee3ab9b9)
+
 
 #
 
 # Enabling Gemini and adding API Key:
-![Enabling_Gemini](https://github.com/Christian-Boettcher/Scripz/assets/103608972/6df8c0d6-84de-4667-adfb-702f0b502555)
+![Enabling_Gemini](https://github.com/Christian-Boettcher/Scripz/assets/103608972/be95569a-9419-4241-971e-b4979e268349)
 
 
 With Gemini enabled and a working API Key you will see this generate button in NEW script creation window. 
@@ -68,10 +69,12 @@ Clicking this will automatically generate a script description based on what is 
 ![Search](https://github.com/Christian-Boettcher/Scripz/assets/103608972/579eb2fc-81ac-45de-9353-5607f56ae949)
 
 ## Light/Dark Theme switching:
-![LightMode](https://github.com/Christian-Boettcher/Scripz/assets/103608972/a43f5c86-f549-4a44-b864-f472da27d5a6)
+![LightMode](https://github.com/Christian-Boettcher/Scripz/assets/103608972/e966fa8a-5f09-432a-98d9-184588ef9605)
+
 
 ## Drag re-ordering:
-![Drag_Handle](https://github.com/Christian-Boettcher/Scripz/assets/103608972/f21241f8-3e5c-46d9-b8ee-3a4c3ba18d8a)
+![Drag_Handle](https://github.com/Christian-Boettcher/Scripz/assets/103608972/8cd18e39-b13a-4545-ae9b-e0113ab77608)
+
 
 
 # TO-DO:
