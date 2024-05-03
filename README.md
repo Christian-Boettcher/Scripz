@@ -86,7 +86,7 @@ Clicking this will automatically generate a script description based on what is 
 - [x] Flet currently has no way to limit minimum windows size. *(meaning the window can be resized so small it makes the UI look bad lol)* -Fixed with latest version
 - [x] Searching does not clear/reset after desired result is found.
 - [x] Minimizing has issues with restoring the window *(current workaround is closing and re-opening)* *will be pushing a patch on this soon*
-- [ ] Windows 11 minimize bug, minimizing in windows 11 causes the app to not be restored and has to close and re-open *looking into this more*
+- [x] Windows 11 minimize bug, minimizing in windows 11 causes the app to not be restored and has to close and re-open *looking into this more*
 - [x] Re-ordering persistance
 - [x] Add search hotkey?
 - [ ] Add different color themes?
