@@ -84,10 +84,10 @@ Clicking this will automatically generate a script description based on what is 
 
 - [ ] Find a way to verify script input is in fact "code" before generating description. *(currently Gemini will attempt to explain anything in script input field using 1-2 sentences)*
 - [x] Flet currently has no way to limit minimum windows size. *(meaning the window can be resized so small it makes the UI look bad lol)* -Fixed with latest version
-- [ ] Searching does not clear/reset after desired result is found.
+- [x] Searching does not clear/reset after desired result is found.
 - [x] Minimizing has issues with restoring the window *(current workaround is closing and re-opening)* *will be pushing a patch on this soon*
 - [ ] Windows 11 minimize bug, minimizing in windows 11 causes the app to not be restored and has to close and re-open *looking into this more*
-- [ ] Re-ordering persistance
-- [ ] Add search hotkey?
+- [x] Re-ordering persistance
+- [x] Add search hotkey?
 - [ ] Add different color themes?
-- [ ] Add window title
+- [x] Add window title
