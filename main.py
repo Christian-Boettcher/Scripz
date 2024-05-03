@@ -13,14 +13,14 @@
 __________________________________________________________
 
 Author: CBoettcher
-Version: v0.0.2
+Version: v0.0.3
 Description:
 Simple python powered GUI for storing scripts or plain text entries in an organized fashion.
 
 """
 
 __author__ = "CBoettcher"
-__version__ = "v0.0.2"
+__version__ = "v0.0.3"
 
 import flet as ft
 import google.generativeai as genai
@@ -34,14 +34,46 @@ import sys
 import atexit
 import subprocess
 
-SCRIPTS_FILE = "data\\scripts.json"
-SCRIPT_TYPES_FILE = "data\\script_types.json"
 ENV_FILE = "data\\profile.env"
 LOG_FILE = "data\\scripz.log"
+SCRIPTS_FILE = "data\\scripts.json"
 GITHUB_API = f"https://api.github.com/repos/Christian-Boettcher/Scripz/releases/latest"
 SETTINGS = {}
 SCRIPT_OBJECTS = {}
-DEFAULT_TYPES = ["Bash", "Cmd", "Other", "Powershell", "Python"]
+DEFAULT_TYPES = [
+	"ASP.NET",
+	"Bash",
+	"C",
+	"C#",
+	"C++",
+	"CSS",
+	"Cmd",
+	"Dart",
+	"Django",
+	"Docker File",
+	"Go",
+	"HTML",
+	"HTTP",
+	"JSON",
+	"JSP",
+	"JSX",
+	"Java",
+	"Javascript",
+	"Lua",
+	"Other",
+	"PHP",
+	"Perl",
+	"Powershell",
+	"Python",
+	"Ruby",
+	"SQL",
+	"Swift",
+	"Text",
+	"Typescript",
+	"VB",
+	"VBScript",
+	"XML",
+	"YAML"]
 SCRIPT_TYPE_OPTIONS = []
 GEMINI_API_KEY = ""
 FIRST_START = True
@@ -227,50 +259,10 @@ def update_env_file(key, value):
 		log_info(f"Added key '{key}' to .\\{ENV_FILE} with a value of {value}.")
 
 
-def write_types_to_json(new_type):
-	"""
-	Writes a new script type to the JSON file and sorts the types alphabetically.
-
-	Description:
-	- If the data\\script_types.json file does not exist, it creates one with the default types.
-
-	Parameters:
-		- new_type (arr): The new script type to add.
-	"""
-	global SCRIPT_TYPE_OPTIONS
-	try:
-		with open(SCRIPT_TYPES_FILE, "w") as json_file:
-			json.dump({"Types": new_type}, json_file, indent=4)
-			log_info(f"Added {new_type} to .\\{SCRIPT_TYPES_FILE}.")
-			log_info("Reloading script_types.json...")
-		load_types_from_json()
-	
-	except FileNotFoundError:
-		log_error(f".\\{SCRIPT_TYPES_FILE} not found.")
-
-
-def load_types_from_json():
-	"""
-	Loads script types from the specified JSON file and appends them to SCRIPT_TYPE_OPTIONS.
-	"""
-	global SCRIPT_TYPE_OPTIONS
-	try:
-		with open(SCRIPT_TYPES_FILE, "r") as json_file:
-			data = json.load(json_file)
-			types = data.get("Types", [])
-			options = [ft.dropdown.Option(type_value) for type_value in types]
-			SCRIPT_TYPE_OPTIONS.extend(options)
-			SCRIPT_TYPE_OPTIONS.sort(key=lambda opt: opt.key.lower())
-	
-	except FileNotFoundError:
-		log_error(f".\\{SCRIPT_TYPES_FILE} not found.")
-		log_info("Writing default types to json...")
-		write_types_to_json(DEFAULT_TYPES)
-
-
 class AppHeader(ft.UserControl):
 	def __init__(self, page):
 		self.page = page
+		self.container = None
 		super().__init__()
 
 	def category_drawer_toggle(self):
@@ -283,7 +275,7 @@ class AppHeader(ft.UserControl):
 
 	def app_header_search(self):
 		return ft.Container(
-			width=320,
+			width=400,
 			bgcolor='white10',
 			border_radius=6,
 			opacity=0,
@@ -304,7 +296,15 @@ class AppHeader(ft.UserControl):
 						color="white",
 						hint_text="Search",
 						hint_style=ft.TextStyle(color="white10", weight=ft.FontWeight.NORMAL),
-						# on_change=lambda e: self.filter_data_table(e),
+						on_change=lambda e: self.container.search(e.control),
+					),
+					ft.IconButton(
+						icon=ft.icons.CLOSE_ROUNDED,
+						icon_size=17,
+						icon_color="white",
+						opacity=0.85,
+						tooltip="Clear",
+						on_click=lambda e: self.clear_search_bar(e)
 					)
 				]
 			)
@@ -317,11 +317,20 @@ class AppHeader(ft.UserControl):
 	def show_search_bar(self, e):
 		if e.data == 'true':
 			self.controls[0].content.controls[1].opacity = 1
+			self.controls[0].content.controls[1].content.controls[1].focus()
+			self.controls[0].content.controls[1].update()
+		elif isinstance(e, ft.KeyboardEvent):
+			self.controls[0].content.controls[1].opacity = 1
+			self.controls[0].content.controls[1].content.controls[1].focus()
 			self.controls[0].content.controls[1].update()
 		else:
-			self.controls[0].content.controls[1].content.controls[1].value = ""
 			self.controls[0].content.controls[1].opacity = 0
 			self.controls[0].content.controls[1].update()
+
+	def clear_search_bar(self, e):
+		self.controls[0].content.controls[1].content.controls[1].value = ""
+		self.controls[0].content.controls[1].update()
+		self.container.search(self.controls[0].content.controls[1].content.controls[1])
 
 	def change_theme(self, e):
 		self.page.theme_mode = "light" if self.page.theme_mode == "dark" else "dark"
@@ -343,7 +352,6 @@ class AppHeader(ft.UserControl):
 			)
 
 	def build(self):
-		# self.app_header_instance()
 		return ft.Container(
 			expand=True,
 			on_hover=lambda e: self.show_search_bar(e),
@@ -505,6 +513,7 @@ class CustomDialog(ft.AlertDialog):
 			self.dismiss_dialog()
 
 	def open_dialog(self, dialog_title=None, dialog_type=None, dialog_message=None, function_ref=None):
+		global GEMINI_API_KEY
 		self.title.value = dialog_title
 		temp_list = []
 		temp_list.clear()
@@ -799,12 +808,15 @@ class CustomDialog(ft.AlertDialog):
 			for x in controls:
 				if isinstance(x, ft.TextField):
 					x.value = ""
+					x.error_text = ""
 				elif isinstance(x, ft.Dropdown):
 					x.value = ""
+					x.error_text = ""
 				elif isinstance(x, ft.Row):
 					for i in x.controls:
 						if isinstance(i, ft.TextField):
 							i.value = ""
+							i.error_text = ""
 						elif isinstance(i, ft.Column):
 							i.controls[0].value = f"""
 
@@ -928,7 +940,7 @@ class CategoryDrawer(ft.NavigationDrawer):
 			autofocus=True,
 			scale=0.80,
 		)
-	
+
 	def build(self):
 		self.controls = [
 			self.add_button,
@@ -936,7 +948,7 @@ class CategoryDrawer(ft.NavigationDrawer):
 			ft.Divider(),
 		]
 		self.on_change = self.change_page
-	
+
 	def change_page(self, e):
 		"""
 		Changes the page and performs necessary actions.
@@ -1021,7 +1033,7 @@ class CategoryDrawer(ft.NavigationDrawer):
 					up.disabled = False
 					down.disabled = False
 		self.page.update()
-	
+
 	def add_nav_option(self, e):
 		"""
 		Adds a navigation option to the navigation drawer.
@@ -1064,7 +1076,7 @@ class CategoryDrawer(ft.NavigationDrawer):
 			self.add_button.selected = False
 			self.new_category_input.visible = False
 			self.page.update()
-	
+
 	def add_nav_option_clicked(self, e):
 		self.new_category_input.visible = not self.new_category_input.visible
 		e.control.selected = not e.control.selected
@@ -1074,7 +1086,7 @@ class CategoryDrawer(ft.NavigationDrawer):
 			self.new_category_input.value = ""
 			e.control.tooltip = "Add New Category"
 		self.page.update()
-	
+
 	def rename_nav_option(self, event, category_object):
 		"""
 		Renames a navigation option in the ft.NavigationDrawer.
@@ -1090,7 +1102,7 @@ class CategoryDrawer(ft.NavigationDrawer):
 			dialog_message=category_object,
 			function_ref=lambda ref=category_object, new_label=None: self.confirm_rename_category(ref, new_label)
 		)
-	
+
 	def confirm_rename_category(self, ref, new_label):
 		"""
 		Renames a category and updates the necessary attributes.
@@ -1116,7 +1128,7 @@ class CategoryDrawer(ft.NavigationDrawer):
 			self.script_container.container_title.value = new_label
 			self.script_container.container_title.update()
 		self.page.dialog.dismiss_dialog()
-	
+
 	def remove_nav_option(self, event, category_object):
 		"""
 		Removes a navigation option and opens a confirmation dialog.
@@ -1132,7 +1144,7 @@ class CategoryDrawer(ft.NavigationDrawer):
 			dialog_message=category_object,
 			function_ref=lambda ref=category_object: self.confirm_remove_category(ref)
 		)
-	
+
 	def confirm_remove_category(self, ref):
 		"""
 		Removes a category from the navigation options and updates the necessary attributes.
@@ -1162,12 +1174,12 @@ class CategoryDrawer(ft.NavigationDrawer):
 		else:
 			self.script_container.container_title.value = "Scripz"
 			self.script_container.add_script_button.visible = False
-		
+
 		self.update_nav_options()
 		self.script_container.update()
 		self.page.dialog.dismiss_dialog()
-	
-	def move_nav_option(self, event, category_object, direction):
+
+	def move_nav_option(self, event, category_object, direction):  # TODO Update json to reflect changes.
 		"""
 		Moves a navigation option (category) up or down within the navigation drawer.
 
@@ -1193,22 +1205,22 @@ class CategoryDrawer(ft.NavigationDrawer):
 			if is_selected:
 				self.selected_index = self.controls.index(category_object) - 3
 				self.change_page(None)
-		
+
 		elif direction == "down":
 			self.move_category_to_index(self.controls, category_object, self.controls.index(category_object) + 1)
 			if is_selected:
 				self.selected_index = self.controls.index(category_object) - 3
 				self.change_page(None)
-		
+
 		self.page.update()
-	
+
 	def move_category_to_index(self, controls_list, element, target_index):
 		if element in controls_list:
 			controls_list.remove(element)
 			controls_list.insert(target_index, element)
 			self.update_nav_options()
 			self.change_page(None)
-	
+
 	def update_drawer(self):
 		"""
 		Updates the navigation drawer with the categories from SCRIPT_OBJECTS.
@@ -1228,7 +1240,7 @@ class CategoryDrawer(ft.NavigationDrawer):
 		if SCRIPT_OBJECTS:
 			for object_category in SCRIPT_OBJECTS:
 				self.controls.append(CategoryNav(page=self.page, drawer=self, category_name=object_category))
-		
+
 		if len(self.controls) >= 4:
 			self.script_container.add_script_button.visible = True
 			self.update_nav_options()
@@ -1308,6 +1320,7 @@ class ScriptObject(ft.UserControl):
 			padding=10,
 			border_radius=10,
 			text_style=ft.TextStyle(size=15, color=ft.colors.WHITE),
+			vertical_offset=60,
 		)
 		self.edit_type = ft.Dropdown(
 			label="Type",
@@ -1316,7 +1329,8 @@ class ScriptObject(ft.UserControl):
 		)
 		self.edit_name = ft.TextField(
 			label="Name",
-			value=self.display_script_name.content.text
+			value=self.display_script_name.content.text,
+			capitalization=ft.TextCapitalization.SENTENCES,
 		)
 		self.edit_script = ft.TextField(
 			label="Script",
@@ -1454,7 +1468,13 @@ class ScriptObject(ft.UserControl):
 	def delete_clicked(self, e):
 		self.delete_script(self)
 
-	def copy_to_clipboard(self, e):  # TODO: Clear search bar and results once desired result is clicked.
+	def copy_to_clipboard(self, e):
+		if self.parent.container_title.value == "Search":
+			self.parent.container_title.value = self.page.drawer.controls[self.page.drawer.selected_index + 3].label
+			self.parent.container_title.update()
+			for index in self.parent.scripts.controls:
+				index.visible = True
+			self.parent.update()
 		self.open_dialog(dialog_type="user_input", dialog_message=self.script_value)
 
 	def update_markdown(self, e):
@@ -1486,12 +1506,14 @@ class ScriptContainer(ft.UserControl):
 			width=300,
 			options=SCRIPT_TYPE_OPTIONS,
 			error_text="",
+			autofocus=True,
 			on_change=lambda e: self.check_dropdown_value(e),
 		)
 		self.new_script_name = ft.TextField(
 			label="Name",
 			hint_text="Enter a name",
 			error_text="",
+			capitalization=ft.TextCapitalization.SENTENCES,
 			on_blur=lambda e: self.check_input_fields(e),
 			on_change=lambda e: self.check_input_fields(e),
 		)
@@ -1775,9 +1797,7 @@ class ScriptContainer(ft.UserControl):
 			# Write the updated data back to the JSON file
 			with open(filename, "w", encoding="utf-8") as f:
 				json.dump(existing_data, f, ensure_ascii=False, indent=4)
-	
-	# TODO: possibly disable re-ordering when in search mode.
-	# TODO: save order somehow.
+
 	def accept_drop(self, e: ft.DragTargetAcceptEvent):
 		"""
 		Handles the event when a drag-and-drop operation is accepted on a specific control.
@@ -1785,16 +1805,40 @@ class ScriptContainer(ft.UserControl):
 		Parameters:
 			- e (ft.DragTargetAcceptEvent): The event object containing information about the drag-and-drop operation.
 		"""
-		src = self.page.get_control(e.src_id)
-		src_index = None
-		destination_index = self.scripts.controls.index(e.control)
-		for i, x in enumerate(self.scripts.controls):
-			if x.content.content.script_name == src.content.script_name:
-				src_index = i
-		self.scripts.controls[src_index], self.scripts.controls[destination_index] = (
-			self.scripts.controls[destination_index], self.scripts.controls[src_index]
-		)
-		self.update()
+		if self.container_title.value != "Search":
+			src = self.page.get_control(e.src_id)
+			src_index = None
+			object_to_move = None
+			object_destination = None
+			destination_index = self.scripts.controls.index(e.control)
+			for i, x in enumerate(self.scripts.controls):
+				if x.content.content.script_name == src.content.script_name and x.content.content.script_value == src.content.script_value:
+					src_index = i
+					break
+	
+			with open(SCRIPTS_FILE, "r", encoding="utf-8") as f:
+				existing_data = json.load(f)
+	
+			for i, item in enumerate(existing_data.get(self.container_title.value, [])):
+				if item.get("script_name") == src.content.script_name and item.get("script_value") == src.content.script_value:
+					object_to_move = i
+					break
+	
+			for i, item in enumerate(existing_data.get(self.container_title.value, [])):
+				if (item.get("script_name") == self.scripts.controls[destination_index].content.content.script_name and item.get("script_value") ==
+						self.scripts.controls[destination_index].content.content.script_value):
+					object_destination = i
+					break
+	
+			self.scripts.controls[src_index], self.scripts.controls[destination_index] = (
+				self.scripts.controls[destination_index], self.scripts.controls[src_index]
+			)
+	
+			SCRIPT_OBJECTS[self.container_title.value][object_to_move], SCRIPT_OBJECTS[self.container_title.value][object_destination] = (
+				SCRIPT_OBJECTS[self.container_title.value][object_destination], SCRIPT_OBJECTS[self.container_title.value][object_to_move]
+			)
+			self.write_json_file(update=True)
+			self.update()
 
 	def create_new_script(self):
 		"""
@@ -1900,7 +1944,7 @@ class ScriptContainer(ft.UserControl):
 			self.container_title.update()
 			for i, x in enumerate(self.scripts.controls):
 				if (
-						searchbar.value in x.content.content.script_name
+						searchbar.value.capitalize() in x.content.content.script_name
 						or searchbar.value in x.content.content.script_type
 						or searchbar.value in x.content.content.script_value
 				):
@@ -1917,23 +1961,27 @@ class ScriptContainer(ft.UserControl):
 
 def main(page: ft.Page):
 	global SCRIPT_OBJECTS
+	global DEFAULT_TYPES
+	global SCRIPT_TYPE_OPTIONS
 	global GEMINI_API_KEY
 	global FIRST_START
 	global SETTINGS
 	global GEMINI_ENABLED
 	setup_logger()
 	load_env_file()
-	GEMINI_ENABLED = load_env_file().get('GEMINI_ENABLED')
-	GEMINI_API_KEY = load_env_file().get('GEMINI_API_KEY')
+	GEMINI_ENABLED = SETTINGS.get('GEMINI_ENABLED')
+	GEMINI_API_KEY = SETTINGS.get('GEMINI_API_KEY')
 	genai.configure(api_key=GEMINI_API_KEY)
-
+	
+	page.title = 'Scripz'
 	header = AppHeader(page)
 	script_container = ScriptContainer(page)
+	header.container = script_container
 	category_drawer = CategoryDrawer(page, script_container)
-	page.dialog = CustomDialog(page, script_container)
+	dialog = CustomDialog(page, script_container)
+	page.dialog = dialog
 	page.drawer = category_drawer
 	page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
-
 
 	page.add(
 		header,
@@ -1948,16 +1996,25 @@ def main(page: ft.Page):
 		page.update()
 
 	if load_env_file():
-		page.theme_mode = load_env_file().get("THEME")
+		page.theme_mode = SETTINGS.get("THEME")
 		if page.theme_mode == "light":
 			AppHeader(page).theme_toggle().selected = True
 	else:
 		page.theme_mode = "dark"
 		update_env_file("THEME", "dark")
+	
+	def on_keyboard(e: ft.KeyboardEvent, header_ref):
+		if e.key == "F" and e.ctrl:
+			header_ref.show_search_bar(e)
+		elif e.key == "Escape":
+			header_ref.clear_search_bar()
+		page.update()
+
+	page.on_keyboard_event = lambda e: on_keyboard(e, header)
 
 	page.update()
 	script_container.load_script_objects_from_json()
-	load_types_from_json()
+	SCRIPT_TYPE_OPTIONS.extend([ft.dropdown.Option(type_value) for type_value in DEFAULT_TYPES])
 	category_drawer.update_drawer()
 	page.window_min_width = 500
 	page.window_min_height = 500
@@ -1967,7 +2024,7 @@ def main(page: ft.Page):
 	if SCRIPT_OBJECTS:
 		FIRST_START = False
 	else:
-		page.dialog.open_dialog(dialog_title="Welcome!", dialog_type="start_up")
+		dialog.open_dialog(dialog_title="Welcome!", dialog_type="start_up")
 
 
 model = genai.GenerativeModel('gemini-pro')
