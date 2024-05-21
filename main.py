@@ -209,6 +209,80 @@ def load_env_file():
         return {}
 
 
+def load_script_objects():
+    """
+    Loads script objects from the specified JSON file and appends them to SCRIPT_OBJECTS.
+    """
+    global SCRIPT_OBJECTS
+    global SCRIPTS_FILE
+    try:
+        with open(SCRIPTS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            for category, items in data.items():
+                if category not in SCRIPT_OBJECTS:
+                    SCRIPT_OBJECTS[category] = []
+                SCRIPT_OBJECTS[category].extend(items)
+            return SCRIPT_OBJECTS
+    except FileNotFoundError:
+        log_error(f".\\{SCRIPTS_FILE} not found. No script objects loaded.")
+        return {}
+
+
+def write_json_file(category="", script_type="", script_name="", script_value="", description="", update=False):
+    """
+    Writes data to a JSON file.
+
+    Description:
+        - This static method is used to write data to a JSON file.
+        - It takes in various parameters such as category, script_type, script_name, script_value, description, and update.
+        - If update is True, it updates the JSON file with the SCRIPT_OBJECTS data.
+        - Otherwise, it reads the existing data from the file (if any), appends the new data to it, and writes the updated data back to the JSON file.
+
+    Parameters:
+        - category (str): The category of the script.
+        - script_type (str): The type of the script.
+        - script_name (str): The name of the script.
+        - script_value (str): The value of the script.
+        - description (str): The description of the script.
+        - update (bool): Flag indicating whether to update the JSON file.
+
+    """
+    global SCRIPT_OBJECTS
+    filename = SCRIPTS_FILE
+    data = {
+        "script_type": script_type,
+        "script_name": script_name,
+        "script_value": script_value,
+        "script_description": description
+    }
+    if update:
+        try:
+            with open(filename, "w", encoding="utf-8") as f:
+                json.dump(SCRIPT_OBJECTS, f, ensure_ascii=False, indent=4)
+        except FileNotFoundError:
+            log_error(f".\\{filename} not found. No script objects updated.")
+
+    else:
+        # Read existing data from the file (if any)
+        try:
+            with open(filename, "r", encoding="utf-8") as f:
+                existing_data = json.load(f)
+        except FileNotFoundError:
+            existing_data = {}
+
+        # Append the new data to the existing data
+        if category not in existing_data:
+            existing_data[category] = []
+            SCRIPT_OBJECTS[category] = []
+        if script_name != "":
+            existing_data[category].append(data)
+            SCRIPT_OBJECTS[category].append(data)
+
+        # Write the updated data back to the JSON file
+        with open(filename, "w", encoding="utf-8") as f:
+            json.dump(existing_data, f, ensure_ascii=False, indent=4)
+
+
 def update_env_file(key, value):
     """
         Updates or adds a key-value pair in the environment file specified by ENV_FILE.
@@ -272,14 +346,14 @@ class AppHeader(ft.Container):
         self.border_radius = ft.border_radius.only(top_left=15, top_right=15)
         self.padding = ft.padding.only(left=15, right=15)
         self.content = ft.Row(
-                expand=True,
-                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                controls=[
-                    self.category_drawer_toggle(),
-                    self.app_header_search(),
-                    self.theme_toggle(),
-                ],
-            )
+            expand=True,
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            controls=[
+                self.category_drawer_toggle(),
+                self.app_header_search(),
+                self.theme_toggle(),
+            ],
+        )
         self.build()
 
     def category_drawer_toggle(self):
@@ -358,13 +432,13 @@ class AppHeader(ft.Container):
 
     def theme_toggle(self):
         return ft.IconButton(
-                on_click=lambda e: self.change_theme(e),
-                icon="light_mode",
-                selected_icon="dark_mode",
-                style=ft.ButtonStyle(
-                    color={"": ft.colors.WHITE, "selected": ft.colors.BLACK}
-                )
+            on_click=lambda e: self.change_theme(e),
+            icon="light_mode",
+            selected_icon="dark_mode",
+            style=ft.ButtonStyle(
+                color={"": ft.colors.WHITE, "selected": ft.colors.BLACK}
             )
+        )
 
 
 class AppFooter(ft.Container):
@@ -971,18 +1045,18 @@ class CategoryDrawer(ft.NavigationDrawer):
             if isinstance(control, ft.NavigationDrawerDestination):
                 if self.controls.index(control) - 3 == self.selected_index:
                     for category in SCRIPT_OBJECTS:
-                        if category == self.controls[self.controls.index(control)].__getattribute__(
-                                "label"):
+                        if category == self.controls[self.controls.index(control)].__getattribute__("label"):
                             for script_object in SCRIPT_OBJECTS.get(category):
                                 self.script_container.scripts.controls.append(
                                     ft.DragTarget(
                                         content=ft.Draggable(
                                             content=ScriptObject(
-                                                self.script_container,
-                                                script_object.get("script_type"),
-                                                script_object.get("script_name"),
-                                                script_object.get("script_value"),
-                                                script_object.get("script_description"),
+                                                page=self.page,
+                                                container=self.script_container,
+                                                script_type=script_object.get("script_type"),
+                                                script_name=script_object.get("script_name"),
+                                                script_value=script_object.get("script_value"),
+                                                description=script_object.get("script_description"),
                                             )
                                         ),
                                         on_accept=self.script_container.accept_drop
@@ -1061,7 +1135,7 @@ class CategoryDrawer(ft.NavigationDrawer):
             self.add_button.selected = False
             self.controls.append(CategoryNav(self.page, self, self.new_category_input.value))
             self.update_nav_options()
-            self.script_container.write_json_file(category=self.new_category_input.value)
+            write_json_file(category=self.new_category_input.value)
             self.selected_index = list(SCRIPT_OBJECTS).index(self.new_category_input.value)
             self.script_container.add_script_button.visible = True
             self.change_page(None)
@@ -1119,7 +1193,7 @@ class CategoryDrawer(ft.NavigationDrawer):
         self.controls.remove(ref)
         self.controls.insert(index, CategoryNav(page=self.page, drawer=self, category_name=new_label))
         self.update_nav_options()
-        self.script_container.write_json_file(update=True)
+        write_json_file(update=True)
 
         if index - 3 == self.selected_index:
             self.script_container.container_title.value = new_label
@@ -1163,7 +1237,7 @@ class CategoryDrawer(ft.NavigationDrawer):
             if category == ref.label:
                 item_to_remove = category
         SCRIPT_OBJECTS.pop(item_to_remove)
-        self.script_container.write_json_file(update=True)
+        write_json_file(update=True)
         self.script_container.scripts.clean()
         if len(self.controls) >= 4:
             self.selected_index = 0
@@ -1295,16 +1369,15 @@ class CategoryNav(ft.NavigationDrawerDestination):
         return self
 
 
-class ScriptObject(ft.UserControl):  # TODO Refactor to meet version 22 changes, UserControl is deprecated
-    def __init__(self, parent, script_type, script_name, script_value, description):
+class ScriptObject(ft.Column):
+    def __init__(self, page, container, script_type, script_name, script_value, description):
         super().__init__()
-        self.parent = parent
+        self.page = page
+        self.container = container
         self.script_type = script_type
         self.script_name = script_name
         self.script_value = script_value
         self.description = description
-        self.delete_script = self.parent.delete_script
-        self.open_dialog = self.parent.page.dialog.open_dialog
         self.markdown_render = ft.Markdown(
             value=None,
             selectable=True,
@@ -1330,7 +1403,7 @@ class ScriptObject(ft.UserControl):  # TODO Refactor to meet version 22 changes,
         )
         self.edit_name = ft.TextField(
             label="Name",
-            value=self.display_script_name.content.text,
+            value=self.script_name,
             capitalization=ft.TextCapitalization.SENTENCES,
         )
         self.edit_script = ft.TextField(
@@ -1351,42 +1424,41 @@ class ScriptObject(ft.UserControl):  # TODO Refactor to meet version 22 changes,
             on_focus=lambda e: self.resize_input_fields(e, self.edit_description),
             on_blur=lambda e: self.resize_input_fields(e, self.edit_description),
         )
-        self.display_view = None
+        self.controls = [
+            ft.Card(
+                ft.Row(
+                    width=self.page.window_width,
+                    controls=[
+                        ft.Row(
+                            [
+                                ft.IconButton(icon="menu", disabled=True),
+                                self.display_script_name,
+                                ft.Row(
+                                    spacing=0,
+                                    controls=[
+                                        ft.IconButton(
+                                            icon=ft.icons.CREATE_OUTLINED,
+                                            tooltip="Edit",
+                                            on_click=self.edit_clicked,
+                                        ),
+                                        ft.IconButton(
+                                            ft.icons.DELETE_OUTLINE,
+                                            tooltip="Delete",
+                                            on_click=self.delete_clicked,
+                                        ),
+                                    ],
+                                    expand=True,
+                                    alignment=ft.MainAxisAlignment.END,
+                                ),
+                            ],
+                            expand=True,
+                        ),
+                    ]
+                ),
+                margin=ft.Margin(0, 0, 10, 0)
+            )
+        ]
 
-    def build(self):
-        self.display_view = ft.Card(
-            ft.Row(
-                width=self.parent.page.window_width,
-                controls=[
-                    ft.Row(
-                        [
-                            ft.IconButton(icon="menu", disabled=True),
-                            self.display_script_name,
-                            ft.Row(
-                                spacing=0,
-                                controls=[
-                                    ft.IconButton(
-                                        icon=ft.icons.CREATE_OUTLINED,
-                                        tooltip="Edit",
-                                        on_click=self.edit_clicked,
-                                    ),
-                                    ft.IconButton(
-                                        ft.icons.DELETE_OUTLINE,
-                                        tooltip="Delete",
-                                        on_click=self.delete_clicked,
-                                    ),
-                                ],
-                                expand=True,
-                                alignment=ft.MainAxisAlignment.END,
-                            ),
-                        ],
-                        expand=True,
-                    ),
-                ]
-            ),
-            margin=ft.Margin(0, 0, 10, 0)
-        )
-        return ft.Column(controls=[self.display_view])
 
     @staticmethod
     def resize_input_fields(e, control_ref):
@@ -1398,7 +1470,7 @@ class ScriptObject(ft.UserControl):  # TODO Refactor to meet version 22 changes,
 
     def edit_clicked(self, e):
         self.edit_type.value = self.script_type
-        self.edit_name.value = self.display_script_name.content.text
+        self.edit_name.value = self.script_name
         self.edit_script.value = self.script_value
         #  Markdown being stupid and requires it formatted this way
         self.markdown_render.value = f"""
@@ -1409,7 +1481,7 @@ class ScriptObject(ft.UserControl):  # TODO Refactor to meet version 22 changes,
 """
         self.edit_description.value = self.description
         self.page.dialog.open_dialog(
-            dialog_title=f'Edit {self.display_script_name.content.text}',
+            dialog_title=f'Edit {self.script_name}',
             dialog_type="edit_script",
             dialog_message=[
                 self.edit_type,
@@ -1435,8 +1507,8 @@ class ScriptObject(ft.UserControl):  # TODO Refactor to meet version 22 changes,
 
     def save_clicked(self, e):
         global SCRIPT_OBJECTS
-        for script_dict in SCRIPT_OBJECTS[self.parent.container_title.value]:
-            if script_dict["script_name"] == self.display_script_name.content.text:
+        for script_dict in SCRIPT_OBJECTS[self.container.container_title.value]:
+            if script_dict["script_name"] == self.script_name:
                 script_dict["script_type"] = self.edit_type.value
                 script_dict["script_name"] = self.edit_name.value
                 script_dict["script_value"] = self.edit_script.value
@@ -1447,8 +1519,8 @@ class ScriptObject(ft.UserControl):  # TODO Refactor to meet version 22 changes,
         self.script_name = self.edit_name.value
         self.script_value = self.edit_script.value
         self.description = self.edit_description.value
-        self.parent.write_json_file(
-            self.parent.container_title,
+        write_json_file(
+            self.container.container_title.value,
             self.edit_type.value,
             self.edit_name.value,
             self.edit_script.value,
@@ -1467,16 +1539,16 @@ class ScriptObject(ft.UserControl):  # TODO Refactor to meet version 22 changes,
         self.page.dialog.dismiss_dialog()
 
     def delete_clicked(self, e):
-        self.delete_script(self)
+        self.container.delete_script(self)
 
     def copy_to_clipboard(self, e):
-        if self.parent.container_title.value == "Search":
-            self.parent.container_title.value = self.page.drawer.controls[self.page.drawer.selected_index + 3].label
-            self.parent.container_title.update()
-            for index in self.parent.scripts.controls:
+        if self.container.container_title.value == "Search":
+            self.container.container_title.value = self.page.drawer.controls[self.page.drawer.selected_index + 3].label
+            self.container.container_title.value.update()
+            for index in self.container.scripts.controls:
                 index.visible = True
-            self.parent.update()
-        self.open_dialog(dialog_type="user_input", dialog_message=self.script_value)
+            self.container.update()
+        self.page.dialog.open_dialog(dialog_type="user_input", dialog_message=self.script_value)
 
     def update_markdown(self, e):
         #  Markdown being stupid and requires it formatted this way
@@ -1489,7 +1561,7 @@ class ScriptObject(ft.UserControl):  # TODO Refactor to meet version 22 changes,
         self.page.update()
 
 
-class ScriptContainer(ft.UserControl):# TODO Refactor to meet version 22 changes, UserControl is deprecated
+class ScriptContainer(ft.Column):
     def __init__(self, page):
         super().__init__()
         global GEMINI_ENABLED
@@ -1579,25 +1651,48 @@ class ScriptContainer(ft.UserControl):# TODO Refactor to meet version 22 changes
             tooltip="Add New",
             visible=False,
         )
+        self.width = self.page.window_width,
+        self.expand = True,
+        self.adaptive = True,
+        self.controls = [
+            ft.Row(
+                controls=[
+                    self.container_title,
+                    self.add_script_button,
+                ],
+                alignment=ft.MainAxisAlignment.END
+            ),
+            ft.Divider(),
+            self.scripts,
+            ft.Divider(),
+        ]
+        load_script_objects()
 
     def build(self):
-        return ft.Column(
-            width=self.page.window_width,
-            expand=True,
-            adaptive=True,
-            controls=[
-                ft.Row(
-                    controls=[
-                        self.container_title,
-                        self.add_script_button,
-                    ],
-                    alignment=ft.MainAxisAlignment.END
-                ),
-                ft.Divider(),
-                self.scripts,
-                ft.Divider(),
-            ],
-        )
+        global SCRIPT_OBJECTS
+        if SCRIPT_OBJECTS:
+            for category in SCRIPT_OBJECTS:
+                for item in SCRIPT_OBJECTS[category]:
+                    script_type = item.get("script_type")
+                    script_name = item.get("script_name")
+                    script_value = item.get("script_value")
+                    script_description = item.get("script_description")
+
+                    self.scripts.controls.append(
+                        ft.DragTarget(
+                            content=ft.Draggable(
+                                content=ScriptObject(
+                                    page=self.page,
+                                    container=self,
+                                    script_type=script_type,
+                                    script_name=script_name,
+                                    script_value=script_value,
+                                    description=script_description,
+                                )
+                            ),
+                            on_accept=self.accept_drop
+                        )
+                    )
 
     def update_markdown(self, e):
         if self.new_script_type.value is not None:
@@ -1684,121 +1779,6 @@ class ScriptContainer(ft.UserControl):# TODO Refactor to meet version 22 changes
                     self.page.update()
                     log_error(f"{e}")
 
-    def load_script_objects_from_json(self):
-        """
-        Loads script objects from the specified JSON file and appends them to SCRIPT_OBJECTS.
-        """
-        global SCRIPT_OBJECTS
-        filename = SCRIPTS_FILE
-        try:
-            with open(filename, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                for category, items in data.items():
-                    if category not in SCRIPT_OBJECTS:
-                        SCRIPT_OBJECTS[category] = []
-                        SCRIPT_OBJECTS[category] = items
-                        for item in SCRIPT_OBJECTS[category]:
-                            script_type = item.get("script_type")
-                            script_name = item.get("script_name")
-                            script_value = item.get("script_value")
-                            script_description = item.get("script_description")
-
-                            self.scripts.controls.append(
-                                ft.DragTarget(
-                                    content=ft.Draggable(
-                                        content=ScriptObject(
-                                            parent=self,
-                                            script_type=script_type,
-                                            script_name=script_name,
-                                            script_value=script_value,
-                                            description=script_description,
-                                        )
-                                    ),
-                                    on_accept=self.accept_drop
-                                )
-                            )
-                    else:
-                        for item in items:
-                            script_type = item.get("script_type")
-                            script_name = item.get("script_name")
-                            script_value = item.get("script_value")
-                            script_description = item.get("script_description")
-
-                            self.scripts.controls.append(
-                                ft.DragTarget(
-                                    content=ft.Draggable(
-                                        content=ScriptObject(
-                                            parent=self,
-                                            script_type=script_type,
-                                            script_name=script_name,
-                                            script_value=script_value,
-                                            description=script_description,
-                                        )
-                                    ),
-                                    on_accept=self.accept_drop
-                                )
-                            )
-                            SCRIPT_OBJECTS[category].append(item)
-        except FileNotFoundError:
-            log_error(f".\\{filename} not found. No script objects loaded.")
-
-        self.update()
-
-    @staticmethod
-    def write_json_file(category="", script_type="", script_name="", script_value="", description="", update=False):
-        """
-        Writes data to a JSON file.
-
-        Description:
-            - This static method is used to write data to a JSON file.
-            - It takes in various parameters such as category, script_type, script_name, script_value, description, and update.
-            - If update is True, it updates the JSON file with the SCRIPT_OBJECTS data.
-            - Otherwise, it reads the existing data from the file (if any), appends the new data to it, and writes the updated data back to the JSON file.
-
-        Parameters:
-            - category (str): The category of the script.
-            - script_type (str): The type of the script.
-            - script_name (str): The name of the script.
-            - script_value (str): The value of the script.
-            - description (str): The description of the script.
-            - update (bool): Flag indicating whether to update the JSON file.
-
-        """
-        global SCRIPT_OBJECTS
-        filename = SCRIPTS_FILE
-        data = {
-            "script_type": script_type,
-            "script_name": script_name,
-            "script_value": script_value,
-            "script_description": description
-        }
-        if update:
-            try:
-                with open(filename, "w", encoding="utf-8") as f:
-                    json.dump(SCRIPT_OBJECTS, f, ensure_ascii=False, indent=4)
-            except FileNotFoundError:
-                log_error(f".\\{filename} not found. No script objects updated.")
-
-        else:
-            # Read existing data from the file (if any)
-            try:
-                with open(filename, "r", encoding="utf-8") as f:
-                    existing_data = json.load(f)
-            except FileNotFoundError:
-                existing_data = {}
-
-            # Append the new data to the existing data
-            if category not in existing_data:
-                existing_data[category] = []
-                SCRIPT_OBJECTS[category] = []
-            if script_name != "":
-                existing_data[category].append(data)
-                SCRIPT_OBJECTS[category].append(data)
-
-            # Write the updated data back to the JSON file
-            with open(filename, "w", encoding="utf-8") as f:
-                json.dump(existing_data, f, ensure_ascii=False, indent=4)
-
     def accept_drop(self, e: ft.DragTargetAcceptEvent):
         """
         Handles the event when a drag-and-drop operation is accepted on a specific control.
@@ -1842,7 +1822,7 @@ class ScriptContainer(ft.UserControl):# TODO Refactor to meet version 22 changes
                 SCRIPT_OBJECTS[self.container_title.value][object_destination],
                 SCRIPT_OBJECTS[self.container_title.value][object_to_move]
             )
-            self.write_json_file(update=True)
+            write_json_file(update=True)
             self.update()
 
     def create_new_script(self):
@@ -1862,23 +1842,24 @@ class ScriptContainer(ft.UserControl):# TODO Refactor to meet version 22 changes
             ft.DragTarget(
                 content=ft.Draggable(
                     content=ScriptObject(
-                        self,
-                        self.new_script_type.value,
-                        self.new_script_name.value,
-                        self.new_script_value.value,
-                        self.new_description.value,
+                        page=self.page,
+                        container=self,
+                        script_type=self.new_script_type.value,
+                        script_name=self.new_script_name.value,
+                        script_value=self.new_script_value.value,
+                        description=self.new_description.value,
                     )
                 ),
                 on_accept=self.accept_drop
             )
         )
         self.scripts.controls.append(script)
-        self.write_json_file(self.container_title.value,
-                             self.new_script_type.value,
-                             self.new_script_name.value,
-                             self.new_script_value.value,
-                             self.new_description.value
-                             )
+        write_json_file(self.container_title.value,
+                        self.new_script_type.value,
+                        self.new_script_name.value,
+                        self.new_script_value.value,
+                        self.new_description.value
+                        )
         self.new_script_type.value = ""
         self.new_script_name.value = ""
         self.new_script_value.value = ""
@@ -1995,7 +1976,7 @@ def main(page: ft.Page):
         AppFooter(page),
     )
 
-    def resize_container(e):
+    def resize_container(e):  # TODO: resizing too small or when not needing to
         script_container.scripts.height = page.window_height - 275
         script_container.scripts.width = page.window_width - 500
         script_container.update()
@@ -2021,7 +2002,6 @@ def main(page: ft.Page):
     page.on_keyboard_event = lambda e: on_keyboard(e, header)
 
     page.update()
-    script_container.load_script_objects_from_json()
     SCRIPT_TYPE_OPTIONS.extend([ft.dropdown.Option(type_value) for type_value in DEFAULT_TYPES])
     category_drawer.update_drawer()
     page.window_min_width = 500
