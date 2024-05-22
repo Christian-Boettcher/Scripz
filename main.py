@@ -13,14 +13,14 @@
 __________________________________________________________
 
 Author: CBoettcher
-Version: v0.0.3
+Version: v0.0.4
 Description:
 Simple python powered GUI for storing scripts or plain text entries in an organized fashion.
 
 """
 
 __author__ = "CBoettcher"
-__version__ = "v0.0.3"
+__version__ = "v0.0.4"
 
 import flet as ft
 import google.generativeai as genai
@@ -335,9 +335,9 @@ def update_env_file(key, value):
 
 
 class AppHeader(ft.Container):
-    def __init__(self, page):
+    def __init__(self, page, container):
         self.page = page
-        self.container = None
+        self.container = container
         super().__init__()
         self.expand = True
         self.on_hover = lambda e: self.show_search_bar(e)
@@ -445,29 +445,27 @@ class AppFooter(ft.Container):
     def __init__(self, page):
         self.page = page
         super().__init__()
-        self.content = ft.Container(
+        self.expand = True
+        self.height = 25
+        self.content = ft.Row(
             expand=True,
-            height=22,
-            content=ft.Row(
-                expand=True,
-                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                controls=[
-                    ft.Container(
-                        content=ft.IconButton(
-                            icon=ft.icons.SETTINGS_OUTLINED,
-                            on_click=lambda e: self.page.dialog.open_dialog(dialog_title="Settings",
-                                                                            dialog_type="settings", )
-                        ),
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            controls=[
+                ft.Container(
+                    content=ft.IconButton(
+                        icon=ft.icons.SETTINGS_OUTLINED,
+                        on_click=lambda e: self.page.dialog.open_dialog(dialog_title="Settings",
+                                                                        dialog_type="settings", ),
                     ),
-                    ft.Container(
-                        expand=True,
-                        content=ft.Text(
-                            f'{__version__}',
-                            text_align=ft.TextAlign.END,
-                        ),
+                ),
+                ft.Container(
+                    expand=True,
+                    content=ft.Text(
+                        f'{__version__}',
+                        text_align=ft.TextAlign.END,
                     ),
-                ],
-            )
+                ),
+            ],
         )
         self.build()
 
@@ -479,6 +477,8 @@ class CustomDialog(ft.AlertDialog):
         self.page = page
         self.container = container
         self.title = ft.Text()
+
+        #region WelcomePage
         self.get_started_text = ft.Text(
             "Get Started!",
             offset=ft.transform.Offset(0, 0),
@@ -504,6 +504,9 @@ class CustomDialog(ft.AlertDialog):
             ),
             disabled=True,
         )
+        #endregion
+
+        #region SettingsPage
         self.api_switch = ft.Switch(
             value=GEMINI_ENABLED,
             label="Enable Gemini",
@@ -526,6 +529,52 @@ class CustomDialog(ft.AlertDialog):
             icon=ft.icons.UPDATE,
             on_click=lambda e: self.check_latest_version(e),
         )
+        #endregion
+
+        #region ScriptInputs
+        self.script_type = ft.Dropdown(
+            label="Type",
+            width=300,
+            options=SCRIPT_TYPE_OPTIONS,
+            error_text="",
+            autofocus=True,
+            on_change=lambda e: self.check_dropdown_value(e),
+        )
+        self.script_name = ft.TextField(
+            label="Name",
+            hint_text="Enter a name",
+            error_text="",
+            capitalization=ft.TextCapitalization.SENTENCES,
+            on_blur=lambda e: self.check_input_fields(e),
+            on_change=lambda e: self.check_input_fields(e),
+        )
+        self.script_value = ft.TextField(
+            label="Script",
+            hint_text="Wrap variables in {{}} e.g.: Get-ADUser {{Username}}",
+            multiline=True,
+            max_lines=10,
+            error_text="",
+            on_blur=lambda e: self.check_input_fields(e),
+            on_change=lambda e: self.check_input_fields(e),
+            expand=True,
+        )
+        self.markdown_render = MarkdownRender(None)
+        self.description = ft.TextField(
+            label="Description",
+            hint_text="",
+            multiline=True,
+            expand=True,
+        )
+        self.generate_description_button = ft.TextButton(
+            text="Generate",
+            on_click=lambda e: self.explain_code(self.script_value.value),
+            visible=GEMINI_ENABLED,
+            disabled=True,
+            tooltip="Generate Description Using Gemini",
+            icon=ft.icons.ASSISTANT_OUTLINED,
+        )
+        #endregion
+
         self.confirm_button = ft.TextButton(disabled=True)
         self.close_button = ft.TextButton()
 
@@ -533,7 +582,7 @@ class CustomDialog(ft.AlertDialog):
         pass
 
     def open_welcome_dialog(self, e):
-        self.dismiss_dialog()
+        self.dismiss_dialog(False)
         self.page.drawer.open = True
         self.page.update()
 
@@ -571,22 +620,20 @@ class CustomDialog(ft.AlertDialog):
             update_env_file("GEMINI_API_KEY", self.api_input.value)
             update_env_file("GEMINI_ENABLED", self.api_switch.value)
             self.update()
-            self.dismiss_dialog()
+            self.dismiss_dialog(False)
         elif GEMINI_API_KEY != "" and GEMINI_ENABLED is False:
             self.container.generate_description_button.visible = not self.container.generate_description_button.visible
             update_env_file("GEMINI_API_KEY", self.api_input.value)
             update_env_file("GEMINI_ENABLED", self.api_switch.value)
             self.update()
-            self.dismiss_dialog()
+            self.dismiss_dialog(False)
         else:
             self.update()
-            self.dismiss_dialog()
+            self.dismiss_dialog(False)
 
     def open_dialog(self, dialog_title=None, dialog_type=None, dialog_message=None, function_ref=None):
         global GEMINI_API_KEY
         self.title.value = dialog_title
-        temp_list = []
-        temp_list.clear()
 
         if dialog_type == "start_up":
             self.content = ft.Column(
@@ -623,22 +670,24 @@ class CustomDialog(ft.AlertDialog):
         elif dialog_type == "download_notify":
             if function_ref:
                 self.close_button.text = "Cancel"
-                self.close_button.on_click = lambda e: self.dismiss_dialog()
+                self.close_button.on_click = lambda e: self.dismiss_dialog(False)
                 self.confirm_button.disabled = False
                 self.confirm_button.text = "Download"
                 self.confirm_button.icon = ft.icons.DOWNLOAD_OUTLINED
                 self.confirm_button.on_click = lambda e: function_ref()
-                temp_list.append(ft.Text(value=dialog_message))
-                temp_list.append(
-                    ft.Row(
-                        [
-                            self.close_button,
-                            self.confirm_button,
-                        ],
-                        alignment=ft.MainAxisAlignment.END,
-                    )
+                self.content = ft.Column(
+                    [
+                        ft.Text(value=dialog_message),
+                        ft.Row(
+                            [
+                                self.close_button,
+                                self.confirm_button,
+                            ],
+                            alignment=ft.MainAxisAlignment.END,
+                        ),
+                    ],
+                    tight=True,
                 )
-                self.content = ft.Column(temp_list, tight=True)
                 self.open = True
                 self.page.update()
             else:
@@ -649,7 +698,7 @@ class CustomDialog(ft.AlertDialog):
         elif dialog_type == "user_input":
             self.confirm_button.disabled = True
             self.close_button.text = "Cancel"
-            self.close_button.on_click = lambda e: self.dismiss_dialog()
+            self.close_button.on_click = lambda e: self.dismiss_dialog(False)
             self.confirm_button.disabled = False
             self.confirm_button.text = "Submit"
             self.confirm_button.icon = ft.icons.SEND_OUTLINED
@@ -698,19 +747,39 @@ class CustomDialog(ft.AlertDialog):
                 self.page.dialog.open = True
                 self.page.update()
                 time.sleep(2)
-                self.dismiss_dialog()
+                self.dismiss_dialog(False)
 
         elif dialog_type == "new_script":
-            if isinstance(dialog_message, list):
-                self.confirm_button.disabled = True
-                self.close_button.text = "Cancel"
-                self.close_button.on_click = lambda e: self.dismiss_dialog(temp_list)
-                self.confirm_button.text = "Save"
-                self.confirm_button.icon = ft.icons.SAVE_OUTLINED
-                self.confirm_button.on_click = lambda e: function_ref()
-                for x in dialog_message:
-                    temp_list.append(x)
-                temp_list.append(
+            self.confirm_button.disabled = True
+            self.close_button.text = "Cancel"
+            self.close_button.on_click = lambda e: self.dismiss_dialog(True)
+            self.confirm_button.text = "Save"
+            self.confirm_button.icon = ft.icons.SAVE_OUTLINED
+            self.confirm_button.on_click = lambda e: function_ref(self.script_type,
+                                                                  self.script_name,
+                                                                  self.script_value,
+                                                                  self.description
+                                                                  )
+            self.content = ft.Column(
+                [
+                    self.script_type,
+                    self.script_name,
+                    ft.Row(
+                        [
+                            self.script_value,
+                            ft.Column(
+                                [
+                                    self.markdown_render
+                                ],
+                                auto_scroll=True,
+                                scroll=ft.ScrollMode.ALWAYS,
+                                expand=True
+                            ),
+                        ],
+                        expand=True
+                    ),
+                    self.description,
+                    self.generate_description_button,
                     ft.Row(
                         [
                             self.close_button,
@@ -718,22 +787,39 @@ class CustomDialog(ft.AlertDialog):
                         ],
                         alignment=ft.MainAxisAlignment.END,
                     )
-                )
-                self.content = ft.Column(temp_list, width=self.page.window_width, )
+                ],
+                width=self.page.window_width,
+            )
             self.open = True
             self.page.update()
 
         elif dialog_type == "edit_script":
-            if isinstance(dialog_message, list):
-                self.confirm_button.disabled = False
-                self.close_button.text = "Cancel"
-                self.close_button.on_click = lambda e: function_ref[1](e)
-                self.confirm_button.text = "Save"
-                self.confirm_button.icon = ft.icons.SAVE_OUTLINED
-                self.confirm_button.on_click = lambda e: function_ref[0](e)
-                for x in dialog_message:
-                    temp_list.append(x)
-                temp_list.append(
+            self.confirm_button.disabled = False
+            self.close_button.text = "Cancel"
+            self.close_button.on_click = lambda e: function_ref[1](e)
+            self.confirm_button.text = "Save"
+            self.confirm_button.icon = ft.icons.SAVE_OUTLINED
+            self.confirm_button.on_click = lambda e: function_ref[0](e)
+            self.content = ft.Column(
+                [
+                    self.script_type,
+                    self.script_name,
+                    ft.Row(
+                        [
+                            self.script_value,
+                            ft.Column(
+                                [
+                                    self.markdown_render
+                                ],
+                                auto_scroll=True,
+                                scroll=ft.ScrollMode.ALWAYS,
+                                expand=True
+                            ),
+                        ],
+                        expand=True
+                    ),
+                    self.description,
+                    self.generate_description_button,
                     ft.Row(
                         [
                             self.close_button,
@@ -741,14 +827,15 @@ class CustomDialog(ft.AlertDialog):
                         ],
                         alignment=ft.MainAxisAlignment.END,
                     )
-                )
-                self.content = ft.Column(temp_list, width=self.page.window_width)
+                ],
+                width=self.page.window_width,
+            )
             self.open = True
             self.page.update()
 
         elif dialog_type == "delete_script":
             self.close_button.text = "Cancel"
-            self.close_button.on_click = lambda e: self.dismiss_dialog()
+            self.close_button.on_click = lambda e: self.dismiss_dialog(False)
             self.confirm_button.disabled = False
             self.confirm_button.text = "Delete"
             self.confirm_button.icon = ft.icons.DELETE_OUTLINE
@@ -778,7 +865,7 @@ class CustomDialog(ft.AlertDialog):
 
         elif dialog_type == "delete_category":
             self.close_button.text = "Cancel"
-            self.close_button.on_click = lambda e: self.dismiss_dialog()
+            self.close_button.on_click = lambda e: self.dismiss_dialog(False)
             self.confirm_button.disabled = False
             self.confirm_button.text = "Delete"
             self.confirm_button.icon = self.confirm_button.icon = ft.icons.DELETE_OUTLINE
@@ -814,7 +901,7 @@ class CustomDialog(ft.AlertDialog):
             new_label_input = ft.TextField(value=dialog_message.label,
                                            on_submit=lambda e: function_ref(dialog_message, new_label_input.value))
             self.close_button.text = "Cancel"
-            self.close_button.on_click = lambda e: self.dismiss_dialog()
+            self.close_button.on_click = lambda e: self.dismiss_dialog(False)
             self.confirm_button.disabled = False
             self.confirm_button.text = "Save"
             self.confirm_button.icon = ft.icons.SAVE_OUTLINED
@@ -838,7 +925,7 @@ class CustomDialog(ft.AlertDialog):
 
         elif dialog_type == "settings":
             self.close_button.text = "Close"
-            self.close_button.on_click = lambda e: self.dismiss_dialog()
+            self.close_button.on_click = lambda e: self.dismiss_dialog(False)
             self.confirm_button.disabled = False
             self.confirm_button.text = "Save"
             self.confirm_button.icon = ft.icons.SAVE_OUTLINED
@@ -871,30 +958,95 @@ class CustomDialog(ft.AlertDialog):
             self.open = True
             self.page.update()
 
-    def dismiss_dialog(self, controls=None):
+    def update_markdown(self, e):
+        if self.script_type.value is not None:
+            self.markdown_render.update_value(self.script_type.value, self.script_value.value)
+        self.page.update()
+
+    def check_dropdown_value(self, e):
+        self.update_markdown(e)
+        if e.control.value is not None:
+            e.control.error_text = ""
+            self.page.update()
+
+    def check_input_fields(self, e):
+        self.update_markdown(e)
+        # Check the current text field if it is empty or not.
+        if e.control.value == '':
+            e.control.error_text = "Must not be empty"
+            self.page.dialog.confirm_button.disabled = True
+            self.generate_description_button.disabled = True
+
+        else:
+            e.control.error_text = ''
+            self.page.dialog.confirm_button.disabled = False
+            self.generate_description_button.disabled = False
+
+        # Double check that neither text fields are empty.
+        if self.script_name.value == '' or self.script_value.value == '':
+            self.page.dialog.confirm_button.disabled = True
+            self.generate_description_button.disabled = True
+
+        else:
+            self.page.dialog.confirm_button.disabled = False
+            self.generate_description_button.disabled = False
+        self.page.update()
+
+    def explain_code(self, code_block):
+        """Explains a given code block using Google Generative AI.
+
+        Args:
+            code_block (str): The code to be explained.
+
+        Returns:
+            str: A clear and concise explanation of the code.
+        """
+        if len([c for c in code_block if c != ' ']) < 5:
+            self.script_value.error_text = "Must contain more than 5 characters to generate description with Gemini"
+            self.page.update()
+
+        elif code_block == '':
+            self.script_value.error_text = "Must not be empty"
+            self.page.update()
+
+        elif self.script_name.value == '':
+            self.script_name.error_text = "Must not be empty"
+            self.page.update()
+
+        elif self.script_type.value is None:
+            self.script_type.error_text = "Must choose a type"
+            self.page.update()
+
+        else:
+            if self.description.value != "":
+                self.description.value = ''
+                # TODO: Find a way to ensure that only actual code is sent and not other prompts.
+                prompt = f"Explain the following {self.script_type.value} code using only 1 to 2 sentences:\n{code_block}"
+                response = model.generate_content(prompt)
+                self.description.value = response.text
+                self.page.update()
+            else:
+                prompt = f"Explain the following {self.script_type.value} code using only 1 to 2 sentences:\n{code_block}"
+                try:
+                    response = model.generate_content(prompt)
+                    self.description.value = response.text
+                    self.page.update()
+                except Exception as e:
+                    # Handle potential exceptions related to invalid API key or other errors
+                    self.description.value = f"400 API key not valid. Please pass a valid API key."
+                    self.page.update()
+                    log_error(f"{e}")
+
+    def dismiss_dialog(self, clear: bool):
         if GEMINI_API_KEY == "" and GEMINI_ENABLED is True:
             self.api_switch.value = False
             self.toggle_api_input(None)
-        if controls:
-            for x in controls:
-                if isinstance(x, ft.TextField):
-                    x.value = ""
-                    x.error_text = ""
-                elif isinstance(x, ft.Dropdown):
-                    x.value = ""
-                    x.error_text = ""
-                elif isinstance(x, ft.Row):
-                    for i in x.controls:
-                        if isinstance(i, ft.TextField):
-                            i.value = ""
-                            i.error_text = ""
-                        elif isinstance(i, ft.Column):
-                            i.controls[0].value = f"""
-
-```
-
-```
-"""
+        if clear:
+            self.script_type.value = ""
+            self.script_name.value = ""
+            self.script_value.value = ""
+            self.description.value = ""
+            self.markdown_render.value = ""
         self.open = False
         self.update()
         self.page.update()
@@ -925,7 +1077,7 @@ class CustomDialog(ft.AlertDialog):
             for key, value in user_values.items():
                 final_message = final_message.replace("{{" + key + "}}", value)
         self.page.set_clipboard(final_message)
-        self.dismiss_dialog()
+        self.dismiss_dialog(False)
         self.open_dialog(dialog_type="user_input", dialog_message=final_message)
 
     def check_latest_version(self, e):
@@ -941,7 +1093,7 @@ class CustomDialog(ft.AlertDialog):
             latest_version = latest_release["tag_name"]
 
             if latest_version == __version__:
-                self.dismiss_dialog()
+                self.dismiss_dialog(False)
                 self.open_dialog(
                     "Up to date!",
                     "download_notify",
@@ -953,7 +1105,7 @@ class CustomDialog(ft.AlertDialog):
                 assets = latest_release["assets"]
                 if len(assets) > 0:
                     asset_url = assets[0]["browser_download_url"]
-                    self.dismiss_dialog()
+                    self.dismiss_dialog(False)
                     self.open_dialog(
                         "Update!",
                         "download_notify",
@@ -967,7 +1119,7 @@ class CustomDialog(ft.AlertDialog):
             log_error(e)
 
     def download_update(self, version, file_url):
-        self.dismiss_dialog()
+        self.dismiss_dialog(False)
         log_info(f"Downloading the latest version ({version})...")
         filename = os.path.join(".\\data\\", os.path.basename(file_url))
         try:
@@ -1198,7 +1350,7 @@ class CategoryDrawer(ft.NavigationDrawer):
         if index - 3 == self.selected_index:
             self.script_container.container_title.value = new_label
             self.script_container.container_title.update()
-        self.page.dialog.dismiss_dialog()
+        self.page.dialog.dismiss_dialog(False)
 
     def remove_nav_option(self, event, category_object):
         """
@@ -1248,7 +1400,7 @@ class CategoryDrawer(ft.NavigationDrawer):
 
         self.update_nav_options()
         self.script_container.update()
-        self.page.dialog.dismiss_dialog()
+        self.page.dialog.dismiss_dialog(False)
 
     def move_nav_option(self, event, category_object, direction):  # TODO Update json to reflect changes.
         """
@@ -1369,6 +1521,25 @@ class CategoryNav(ft.NavigationDrawerDestination):
         return self
 
 
+class MarkdownRender(ft.Markdown):
+    def __init__(self, value):
+        super().__init__()
+        self.value = value
+        self.selectable = True
+        self.extension_set = ft.MarkdownExtensionSet.GITHUB_FLAVORED
+        self.code_theme = "atom-one-dark"
+        self.code_style = ft.TextStyle(font_family="Roboto Mono")
+
+    def update_value(self, script_type: str, script_value: str):
+        #  Markdown being stupid and requires it formatted this way
+        self.value = f"""
+
+```{script_type.lower()}
+{script_value}
+```
+"""
+
+
 class ScriptObject(ft.Column):
     def __init__(self, page, container, script_type, script_name, script_value, description):
         super().__init__()
@@ -1378,13 +1549,7 @@ class ScriptObject(ft.Column):
         self.script_name = script_name
         self.script_value = script_value
         self.description = description
-        self.markdown_render = ft.Markdown(
-            value=None,
-            selectable=True,
-            extension_set=ft.MarkdownExtensionSet.GITHUB_FLAVORED,
-            code_theme="atom-one-dark",
-            code_style=ft.TextStyle(font_family="Roboto Mono"),
-        )
+        self.markdown_render = MarkdownRender(None)
         self.display_script_name = ft.Tooltip(
             message=f'Type: {self.script_type}\nDescription: {self.description}\nScript Value: \n{self.script_value}',
             content=ft.TextButton(
@@ -1396,33 +1561,15 @@ class ScriptObject(ft.Column):
             text_style=ft.TextStyle(size=15, color=ft.colors.WHITE),
             vertical_offset=60,
         )
-        self.edit_type = ft.Dropdown(
-            label="Type",
-            options=SCRIPT_TYPE_OPTIONS,
-            value=self.script_type,
+        self.edit_button = ft.IconButton(
+            icon=ft.icons.CREATE_OUTLINED,
+            tooltip="Edit",
+            on_click=self.edit_clicked,
         )
-        self.edit_name = ft.TextField(
-            label="Name",
-            value=self.script_name,
-            capitalization=ft.TextCapitalization.SENTENCES,
-        )
-        self.edit_script = ft.TextField(
-            label="Script",
-            value=self.script_value,
-            multiline=True,
-            max_lines=5,
-            on_focus=lambda e: self.resize_input_fields(e, self.edit_script),
-            on_blur=lambda e: self.resize_input_fields(e, self.edit_script),
-            on_change=lambda e: self.update_markdown(e),
-            expand=True,
-        )
-        self.edit_description = ft.TextField(
-            label="Description",
-            value=self.description,
-            multiline=True,
-            expand=True,
-            on_focus=lambda e: self.resize_input_fields(e, self.edit_description),
-            on_blur=lambda e: self.resize_input_fields(e, self.edit_description),
+        self.delete_button = ft.IconButton(
+            ft.icons.DELETE_OUTLINE,
+            tooltip="Delete",
+            on_click=self.delete_clicked,
         )
         self.controls = [
             ft.Card(
@@ -1436,16 +1583,8 @@ class ScriptObject(ft.Column):
                                 ft.Row(
                                     spacing=0,
                                     controls=[
-                                        ft.IconButton(
-                                            icon=ft.icons.CREATE_OUTLINED,
-                                            tooltip="Edit",
-                                            on_click=self.edit_clicked,
-                                        ),
-                                        ft.IconButton(
-                                            ft.icons.DELETE_OUTLINE,
-                                            tooltip="Delete",
-                                            on_click=self.delete_clicked,
-                                        ),
+                                        self.edit_button,
+                                        self.delete_button,
                                     ],
                                     expand=True,
                                     alignment=ft.MainAxisAlignment.END,
@@ -1455,53 +1594,19 @@ class ScriptObject(ft.Column):
                         ),
                     ]
                 ),
-                margin=ft.Margin(0, 0, 10, 0)
+                margin=ft.Margin(0, 0, 10, 0),
             )
         ]
 
-
-    @staticmethod
-    def resize_input_fields(e, control_ref):
-        if control_ref.max_lines == 10:
-            control_ref.max_lines = 5
-        else:
-            control_ref.max_lines = 10
-        control_ref.update()
-
     def edit_clicked(self, e):
-        self.edit_type.value = self.script_type
-        self.edit_name.value = self.script_name
-        self.edit_script.value = self.script_value
-        #  Markdown being stupid and requires it formatted this way
-        self.markdown_render.value = f"""
-
-```{self.edit_type.value.lower()}
-{self.edit_script.value}
-```
-"""
-        self.edit_description.value = self.description
+        self.page.dialog.script_type.value = self.script_type
+        self.page.dialog.script_name.value = self.script_name
+        self.page.dialog.script_value.value = self.script_value
+        self.page.dialog.description.value = self.description
+        self.page.dialog.update_markdown(None)
         self.page.dialog.open_dialog(
             dialog_title=f'Edit {self.script_name}',
             dialog_type="edit_script",
-            dialog_message=[
-                self.edit_type,
-                self.edit_name,
-                ft.Row(
-                    [
-                        self.edit_script,
-                        ft.Column(
-                            [
-                                self.markdown_render
-                            ],
-                            auto_scroll=True,
-                            scroll=ft.ScrollMode.ALWAYS,
-                            expand=True
-                        ),
-                    ],
-                    expand=True
-                ),
-                self.edit_description,
-            ],
             function_ref=[lambda event: self.save_clicked(event), lambda event: self.cancel_clicked(event)]
         )
 
@@ -1509,34 +1614,30 @@ class ScriptObject(ft.Column):
         global SCRIPT_OBJECTS
         for script_dict in SCRIPT_OBJECTS[self.container.container_title.value]:
             if script_dict["script_name"] == self.script_name:
-                script_dict["script_type"] = self.edit_type.value
-                script_dict["script_name"] = self.edit_name.value
-                script_dict["script_value"] = self.edit_script.value
-                script_dict["script_description"] = self.edit_description.value
+                script_dict["script_type"] = self.page.dialog.script_type.value
+                script_dict["script_name"] = self.page.dialog.script_name.value
+                script_dict["script_value"] = self.page.dialog.script_value.value
+                script_dict["script_description"] = self.page.dialog.description.value
                 break
-        self.script_type = self.edit_type.value
-        self.display_script_name.content.text = self.edit_name.value
-        self.script_name = self.edit_name.value
-        self.script_value = self.edit_script.value
-        self.description = self.edit_description.value
+        self.script_type = self.page.dialog.script_type.value
+        self.script_name = self.page.dialog.script_name.value
+        self.script_value = self.page.dialog.script_value.value
+        self.description = self.page.dialog.description.value
+        self.display_script_name.content.text = self.script_name
         write_json_file(
             self.container.container_title.value,
-            self.edit_type.value,
-            self.edit_name.value,
-            self.edit_script.value,
-            self.edit_description.value,
+            self.script_type,
+            self.script_name,
+            self.script_value,
+            self.description,
             update=True
         )
         self.update()
-        self.page.dialog.dismiss_dialog()
+        self.page.dialog.dismiss_dialog(True)
 
     def cancel_clicked(self, e):
-        self.edit_name.value = ""
-        self.edit_script.value = ""
-        self.edit_type.value = ""
         self.update_markdown(None)
-        self.edit_description.value = ""
-        self.page.dialog.dismiss_dialog()
+        self.page.dialog.dismiss_dialog(True)
 
     def delete_clicked(self, e):
         self.container.delete_script(self)
@@ -1551,13 +1652,7 @@ class ScriptObject(ft.Column):
         self.page.dialog.open_dialog(dialog_type="user_input", dialog_message=self.script_value)
 
     def update_markdown(self, e):
-        #  Markdown being stupid and requires it formatted this way
-        self.markdown_render.value = f"""
-
-```{self.script_type.lower()}
-{self.edit_script.value}
-```
-"""
+        self.markdown_render.update_value(self.script_type, self.script_value)
         self.page.update()
 
 
@@ -1567,53 +1662,6 @@ class ScriptContainer(ft.Column):
         global GEMINI_ENABLED
         self.page = page
         self.container_title = ft.Text("Scripz", size=30, expand=True)
-        self.markdown_render = ft.Markdown(
-            value=None,
-            selectable=True,
-            extension_set=ft.MarkdownExtensionSet.GITHUB_FLAVORED,
-            code_theme="atom-one-dark",
-            code_style=ft.TextStyle(font_family="Roboto Mono"),
-        )
-        self.new_script_type = ft.Dropdown(
-            label="Type",
-            width=300,
-            options=SCRIPT_TYPE_OPTIONS,
-            error_text="",
-            autofocus=True,
-            on_change=lambda e: self.check_dropdown_value(e),
-        )
-        self.new_script_name = ft.TextField(
-            label="Name",
-            hint_text="Enter a name",
-            error_text="",
-            capitalization=ft.TextCapitalization.SENTENCES,
-            on_blur=lambda e: self.check_input_fields(e),
-            on_change=lambda e: self.check_input_fields(e),
-        )
-        self.new_script_value = ft.TextField(
-            label="Script",
-            hint_text="Wrap variables in {{}} e.g.: Get-ADUser {{Username}}",
-            multiline=True,
-            max_lines=10,
-            error_text="",
-            on_blur=lambda e: self.check_input_fields(e),
-            on_change=lambda e: self.check_input_fields(e),
-            expand=True,
-        )
-        self.new_description = ft.TextField(
-            label="Description",
-            hint_text="",
-            multiline=True,
-            expand=True,
-        )
-        self.generate_description_button = ft.TextButton(
-            text="Generate",
-            on_click=lambda e: self.explain_code(self.new_script_value.value),
-            visible=GEMINI_ENABLED,
-            disabled=True,
-            tooltip="Generate Description Using Gemini",
-            icon=ft.icons.ASSISTANT_OUTLINED,
-        )
         self.scripts = ft.Column(
             height=self.page.window_height - 275,
             scroll=ft.ScrollMode.ALWAYS,
@@ -1625,26 +1673,6 @@ class ScriptContainer(ft.Column):
             on_click=lambda e: self.page.dialog.open_dialog(
                 dialog_title="New Script",
                 dialog_type="new_script",
-                dialog_message=[
-                    self.new_script_type,
-                    self.new_script_name,
-                    ft.Row(
-                        [
-                            self.new_script_value,
-                            ft.Column(
-                                [
-                                    self.markdown_render
-                                ],
-                                auto_scroll=True,
-                                scroll=ft.ScrollMode.ALWAYS,
-                                expand=True
-                            ),
-                        ],
-                        expand=True
-                    ),
-                    self.new_description,
-                    self.generate_description_button,
-                ],
                 function_ref=self.create_new_script
             ),
             mini=True,
@@ -1676,8 +1704,7 @@ class ScriptContainer(ft.Column):
                     script_type = item.get("script_type")
                     script_name = item.get("script_name")
                     script_value = item.get("script_value")
-                    script_description = item.get("script_description")
-
+                    description = item.get("script_description")
                     self.scripts.controls.append(
                         ft.DragTarget(
                             content=ft.Draggable(
@@ -1687,97 +1714,12 @@ class ScriptContainer(ft.Column):
                                     script_type=script_type,
                                     script_name=script_name,
                                     script_value=script_value,
-                                    description=script_description,
+                                    description=description,
                                 )
                             ),
                             on_accept=self.accept_drop
                         )
                     )
-
-    def update_markdown(self, e):
-        if self.new_script_type.value is not None:
-            self.markdown_render.value = f"""
-
-```{self.new_script_type.value.lower()}
-{self.new_script_value.value}
-```
-"""
-
-        self.page.update()
-
-    def check_dropdown_value(self, e):
-        self.update_markdown(e)
-        if e.control.value is not None:
-            e.control.error_text = ""
-            self.page.update()
-
-    def check_input_fields(self, e):
-        self.update_markdown(e)
-        # Check the current text field if it is empty or not.
-        if e.control.value == '':
-            e.control.error_text = "Must not be empty"
-            self.page.dialog.confirm_button.disabled = True
-            self.generate_description_button.disabled = True
-
-        else:
-            e.control.error_text = ''
-            self.page.dialog.confirm_button.disabled = False
-            self.generate_description_button.disabled = False
-
-        # Double check that neither text fields are empty.
-        if self.new_script_name.value == '' or self.new_script_value.value == '':
-            self.page.dialog.confirm_button.disabled = True
-            self.generate_description_button.disabled = True
-
-        else:
-            self.page.dialog.confirm_button.disabled = False
-            self.generate_description_button.disabled = False
-        self.page.update()
-
-    def explain_code(self, code_block):
-        """Explains a given code block using Google Generative AI.
-
-        Args:
-            code_block (str): The code to be explained.
-
-        Returns:
-            str: A clear and concise explanation of the code.
-        """
-        if len([c for c in code_block if c != ' ']) < 5:
-            self.new_script_value.error_text = "Must contain more than 5 characters to generate description with Gemini"
-            self.page.update()
-
-        elif code_block == '':
-            self.new_script_value.error_text = "Must not be empty"
-            self.page.update()
-
-        elif self.new_script_name.value == '':
-            self.new_script_name.error_text = "Must not be empty"
-            self.page.update()
-
-        elif self.new_script_type.value is None:
-            self.new_script_type.error_text = "Must choose a type"
-            self.page.update()
-
-        else:
-            if self.new_description.value != "":
-                self.new_description.value = ''
-                # TODO: Find a way to ensure that only actual code is sent and not other prompts.
-                prompt = f"Explain the following {self.new_script_type.value} code using only 1 to 2 sentences:\n{code_block}"
-                response = model.generate_content(prompt)
-                self.new_description.value = response.text
-                self.page.update()
-            else:
-                prompt = f"Explain the following {self.new_script_type.value} code using only 1 to 2 sentences:\n{code_block}"
-                try:
-                    response = model.generate_content(prompt)
-                    self.new_description.value = response.text
-                    self.page.update()
-                except Exception as e:
-                    # Handle potential exceptions related to invalid API key or other errors
-                    self.new_description.value = f"400 API key not valid. Please pass a valid API key."
-                    self.page.update()
-                    log_error(f"{e}")
 
     def accept_drop(self, e: ft.DragTargetAcceptEvent):
         """
@@ -1825,7 +1767,7 @@ class ScriptContainer(ft.Column):
             write_json_file(update=True)
             self.update()
 
-    def create_new_script(self):
+    def create_new_script(self, script_type, script_name, script_value, script_description):
         """
         Creates a new script and performs necessary actions.
 
@@ -1838,35 +1780,28 @@ class ScriptContainer(ft.Column):
         - self: The current instance of the class.
 
         """
-        script = (
+        self.scripts.controls.append(
             ft.DragTarget(
                 content=ft.Draggable(
                     content=ScriptObject(
                         page=self.page,
                         container=self,
-                        script_type=self.new_script_type.value,
-                        script_name=self.new_script_name.value,
-                        script_value=self.new_script_value.value,
-                        description=self.new_description.value,
+                        script_type=script_type.value,
+                        script_name=script_name.value,
+                        script_value=script_value.value,
+                        description=script_description.value,
                     )
                 ),
                 on_accept=self.accept_drop
             )
         )
-        self.scripts.controls.append(script)
         write_json_file(self.container_title.value,
-                        self.new_script_type.value,
-                        self.new_script_name.value,
-                        self.new_script_value.value,
-                        self.new_description.value
+                        script_type.value,
+                        script_name.value,
+                        script_value.value,
+                        script_description.value
                         )
-        self.new_script_type.value = ""
-        self.new_script_name.value = ""
-        self.new_script_value.value = ""
-        self.new_description.value = ""
-        self.update_markdown(None)
-        self.generate_description_button.disabled = True
-        self.page.dialog.dismiss_dialog()
+        self.page.dialog.dismiss_dialog(True)
         self.update()
 
     def delete_script(self, script):
@@ -1901,7 +1836,7 @@ class ScriptContainer(ft.Column):
             if x.content.content.script_name == script.script_name and x.content.content.script_value == script.script_value:
                 self.scripts.controls.remove(self.scripts.controls[index])
                 self.scripts.update()
-            self.page.dialog.dismiss_dialog()
+            self.page.dialog.dismiss_dialog(False)
             try:
                 with open(SCRIPTS_FILE, "r", encoding="utf-8") as f:
                     existing_data = json.load(f)
@@ -1961,9 +1896,8 @@ def main(page: ft.Page):
     genai.configure(api_key=GEMINI_API_KEY)
 
     page.title = 'Scripz'
-    header = AppHeader(page)
     script_container = ScriptContainer(page)
-    header.container = script_container
+    header = AppHeader(page, script_container)
     category_drawer = CategoryDrawer(page, script_container)
     dialog = CustomDialog(page, script_container)
     page.dialog = dialog
@@ -1976,9 +1910,8 @@ def main(page: ft.Page):
         AppFooter(page),
     )
 
-    def resize_container(e):  # TODO: resizing too small or when not needing to
+    def resize_container(e):
         script_container.scripts.height = page.window_height - 275
-        script_container.scripts.width = page.window_width - 500
         script_container.update()
         page.update()
 
@@ -2004,7 +1937,7 @@ def main(page: ft.Page):
     page.update()
     SCRIPT_TYPE_OPTIONS.extend([ft.dropdown.Option(type_value) for type_value in DEFAULT_TYPES])
     category_drawer.update_drawer()
-    page.window_min_width = 500
+    page.window_min_width = 530
     page.window_min_height = 500
     page.update()
     page.on_resize = resize_container
