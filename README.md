@@ -7,18 +7,6 @@
 
 #
 
-*Note: Where ever the Scripz.exe is ran, a data folder will be created, suggest creating a new folder to place the .exe in.*
-![Saving_File](https://github.com/Christian-Boettcher/Scripz/assets/103608972/e5da2e3c-f424-489d-a79e-946ec25f5861)
-
-#
-
-**This is the data folder structure that gets dynamically created.**
-
-*(scripts.json is only created after the first script entry is created)*
-![Data_Folder_Structure](https://github.com/Christian-Boettcher/Scripz/assets/103608972/6559b710-3078-48d5-9f2e-b3d549b7775b)
-
-#
-
 On first start you'll be greeted with a "Welcome" dialog
 ![FirstStart](https://github.com/Christian-Boettcher/Scripz/assets/103608972/1c254d13-8a95-4a4a-863a-357862454e5e)
 
