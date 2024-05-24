@@ -34,9 +34,11 @@ import sys
 import atexit
 import subprocess
 
-ENV_FILE = "data\\profile.env"
-LOG_FILE = "data\\scripz.log"
-SCRIPTS_FILE = "data\\scripts.json"
+LOCAL_APPDATA = os.getenv('LOCALAPPDATA')
+DATA_DIR = os.path.join(LOCAL_APPDATA, 'Scripz', 'data')
+ENV_FILE = os.path.join(DATA_DIR, 'profile.env')
+LOG_FILE = os.path.join(DATA_DIR, 'scripz.log')
+SCRIPTS_FILE = os.path.join(DATA_DIR, 'scripts.json')
 GITHUB_API = f"https://api.github.com/repos/Christian-Boettcher/Scripz/releases/latest"
 SETTINGS = {}
 SCRIPT_OBJECTS = {}
@@ -128,8 +130,8 @@ def setup_logger():
     None
     """
     global LOG_FILE
-    if not os.path.isdir("data"):
-        os.mkdir("data")  # Create 'data' directory if it doesn't exist
+    # if not os.path.isdir("data"):
+    #     os.mkdir("data")  # Create 'data' directory if it doesn't exist
     if not os.path.exists(LOG_FILE):
         # Initialize 'scripz.log' file if it doesn't exist
         with open(LOG_FILE, 'a') as file:
@@ -248,7 +250,6 @@ def write_json_file(category="", script_type="", script_name="", script_value=""
 
     """
     global SCRIPT_OBJECTS
-    filename = SCRIPTS_FILE
     data = {
         "script_type": script_type,
         "script_name": script_name,
@@ -257,15 +258,15 @@ def write_json_file(category="", script_type="", script_name="", script_value=""
     }
     if update:
         try:
-            with open(filename, "w", encoding="utf-8") as f:
+            with open(SCRIPTS_FILE, "w", encoding="utf-8") as f:
                 json.dump(SCRIPT_OBJECTS, f, ensure_ascii=False, indent=4)
         except FileNotFoundError:
-            log_error(f".\\{filename} not found. No script objects updated.")
+            log_error(f".\\{SCRIPTS_FILE} not found. No script objects updated.")
 
     else:
         # Read existing data from the file (if any)
         try:
-            with open(filename, "r", encoding="utf-8") as f:
+            with open(SCRIPTS_FILE, "r", encoding="utf-8") as f:
                 existing_data = json.load(f)
         except FileNotFoundError:
             existing_data = {}
@@ -279,7 +280,7 @@ def write_json_file(category="", script_type="", script_name="", script_value=""
             SCRIPT_OBJECTS[category].append(data)
 
         # Write the updated data back to the JSON file
-        with open(filename, "w", encoding="utf-8") as f:
+        with open(SCRIPTS_FILE, "w", encoding="utf-8") as f:
             json.dump(existing_data, f, ensure_ascii=False, indent=4)
 
 
